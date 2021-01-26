@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<!--
+ *  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree.
+-->
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="description" content="WebRTC code samples" />
+  <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1" />
+  <meta itemprop="description" content="Client-side WebRTC code samples" />
+  <meta itemprop="image" content="../../../images/webrtc-icon-192x192.png" />
+  <meta itemprop="name" content="WebRTC code samples" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta id="theme-color" name="theme-color" content="#ffffff" />
+
+  <base target="_blank" />
+
+  <title>Select audio and video sources</title>
+
+  <link href="//fonts.googleapis.com/css?family=Roboto:300,400,500,700" rel="stylesheet" type="text/css" />
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+
+  <style>
+    div.select {
+      display: inline-block;
+      margin: 0 0 1em 0;
+    }
+
+    p.small {
+      font-size: 0.7em;
+    }
+
+    label {
+      width: 12em;
+      display: inline-block;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="container">
+    <div class="select">
+      <label for="videoSource">Video source: </label><select id="videoSource"></select>
+    </div>
+
+    <div>
+      <video id="video" playsinline autoplay></video>
+    </div>
+
+  </div>
+
+  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+  <script src="webcamerscript.js"></script>
+  <script src="captureandbase64.js"></script>
+
+
+  <!--
+      <div id="container">
+        <video width="200" height="200" autoplay="true" id="video">
+        </video>
+      </div>
+      <br></br>
+      <p> Image Converted to String: </p>
+      <p id="printresult"></p>
+  -->
+
+
+  <button onclick="capture()">Capture</button> <br> </br>
+  <canvas id="canvas" style="overflow:auto"></canvas>
+
+
+
+  <script>
+    /*
+var video = document.querySelector("#video");
+if (navigator.mediaDevices.getUserMedia) {
+ navigator.mediaDevices.getUserMedia({ video: true })
+   .then(function (stream) {
+     video.srcObject = stream;
+   })
+   .catch(function (err0r) {
+     console.log("Something went wrong!");
+   });
+}
+*/
+
+    var resultb64 = "";
+    function capture() {
+      var canvas = document.getElementById("canvas");
+      var video = document.getElementById("video");
+
+      canvas.style.display = "none";
+      console.log(video.videoHeight);
+      console.log(video.videoWidth);
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      canvas
+        .getContext("2d")
+        .drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      resultb64 = canvas.toDataURL();
+      //document.getElementById("printresult").innerHTML = canvas.toDataURL();
+      //return data;
+      console.log(resultb64);
+
+
+      //const axios = require("axios").default;
+      axios
+        .post("http://127.0.0.1:8080/upload", {
+          img: resultb64,
+        })
+        .then(function (response) {
+          console.log(response);
+        })
+        .catch(function (error) {
+          console.log(error);
+        });
+
+    }
+    document.getElementById("printresult").innerHTML = resultb64;
+
+  </script>
+
+  <script>
+    /*
+*  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
+*
+*  Use of this source code is governed by a BSD-style license
+*  that can be found in the LICENSE file in the root of the source
+*  tree.
+*/
+
+    "use strict";
+
+    const videoElement = document.querySelector("video");
+    const videoSelect = document.querySelector("select#videoSource");
+    const selectors = [videoSelect];
+
+    function gotDevices(deviceInfos) {
+      const values = selectors.map((select) => select.value);
+      selectors.forEach((select) => {
+        while (select.firstChild) {
+          select.removeChild(select.firstChild);
+        }
+      });
+      for (let i = 0; i !== deviceInfos.length; ++i) {
+        const deviceInfo = deviceInfos[i];
+        const option = document.createElement("option");
+        option.value = deviceInfo.deviceId;
+
+        if (deviceInfo.kind === "videoinput") {
+          option.text = deviceInfo.label || `camera ${videoSelect.length + 1}`;
+          videoSelect.appendChild(option);
+        } else {
+          console.log("Some other kind of source/device: ", deviceInfo);
+        }
+      }
+      selectors.forEach((select, selectorIndex) => {
+        if (
+          Array.prototype.slice
+            .call(select.childNodes)
+            .some((n) => n.value === values[selectorIndex])
+        ) {
+          select.value = values[selectorIndex];
+        }
+      });
+    }
+
+    navigator.mediaDevices.enumerateDevices().then(gotDevices).catch(handleError);
+
+    // Attach audio output device to video element using device/sink ID.
+    function attachSinkId(element, sinkId) {
+      if (typeof element.sinkId !== "undefined") {
+        element
+          .setSinkId(sinkId)
+          .then(() => {
+            console.log(`Success, audio output device attached: ${sinkId}`);
+          })
+          .catch((error) => {
+            let errorMessage = error;
+            if (error.name === "SecurityError") {
+              errorMessage = `You need to use HTTPS for selecting audio output device: ${error}`;
+            }
+            console.error(errorMessage);
+            // Jump back to first output device in the list as it's the default.
+            audioOutputSelect.selectedIndex = 0;
+          });
+      } else {
+        console.warn("Browser does not support output device selection.");
+      }
+    }
+
+    function gotStream(stream) {
+      window.stream = stream; // make stream available to console
+      videoElement.srcObject = stream;
+      // Refresh button list in case labels have become available
+      return navigator.mediaDevices.enumerateDevices();
+    }
+
+    function handleError(error) {
+      console.log(
+        "navigator.MediaDevices.getUserMedia error: ",
+        error.message,
+        error.name
+      );
+    }
+
+    function start() {
+      if (window.stream) {
+        window.stream.getTracks().forEach((track) => {
+          track.stop();
+        });
+      }
+      //const audioSource = audioInputSelect.value;
+      const videoSource = videoSelect.value;
+      const constraints = {
+        //audio: { deviceId: audioSource ? { exact: audioSource } : undefined },
+        video: { deviceId: videoSource ? { exact: videoSource } : undefined },
+      };
+      navigator.mediaDevices
+        .getUserMedia(constraints)
+        .then(gotStream)
+        .then(gotDevices)
+        .catch(handleError);
+    }
+
+    videoSelect.onchange = start;
+
+    start();
+
+  </script>
+</body>
+
+</html>
